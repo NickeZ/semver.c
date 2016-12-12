@@ -19,7 +19,7 @@
 #define DELIMITERS   DELIMITER PR_DELIMITER MT_DELIMITER
 #define VALID_CHARS  NUMBERS ALPHA DELIMITERS
 
-static const int MAX_SIZE     = sizeof(char) * 255;
+static const size_t MAX_SIZE     = sizeof(char) * 255;
 static const int MAX_SAFE_INT = (unsigned int) -1 >> 1;
 
 /**
@@ -52,7 +52,8 @@ strcut (char *str, int begin, int len) {
 
 static int
 contains (const char c, const char *matrix, int len) {
-  for (unsigned int x = 0; x < len; x++)
+  int x;
+  for (x = 0; x < len; x++)
     if ((char) matrix[x] == c) return 1;
   return 0;
 }
@@ -62,7 +63,8 @@ has_valid_chars (const char *str, const char *matrix) {
   size_t len = strlen(str);
   size_t mlen = strlen(matrix);
 
-  for (unsigned int i = 0; i < len; i++)
+  size_t i;
+  for (i = 0; i < len; i++)
     if (contains(str[i], matrix, mlen) == 0)
       return 0;
 
@@ -300,7 +302,8 @@ compare_metadata_versions (struct metadata_s xm, struct metadata_s ym) {
   }
 
   // Then compare each version slice individually
-  for (int i = 0; i < xm.version_count; i++) {
+  int i;
+  for (i = 0; i < xm.version_count; i++) {
     int xv = xm.version[i];
     int yv = ym.version[i];
     int resolution = binary_comparison(xv, yv);
@@ -656,7 +659,8 @@ semver_clean (char *s) {
   size_t len = strlen(s);
   size_t mlen = strlen(VALID_CHARS);
 
-  for (unsigned int i = 0; i < len; i++) {
+  size_t i;
+  for (i = 0; i < len; i++) {
     if (contains(s[i], VALID_CHARS, mlen) == 0) {
       strcut(s, i, 1);
       --len; --i;
@@ -669,10 +673,11 @@ semver_clean (char *s) {
 static int
 char_to_int (const char * str) {
   int buf = 0;
-  int len = strlen(str);
-  int mlen = strlen(VALID_CHARS);
+  size_t len = strlen(str);
+  size_t mlen = strlen(VALID_CHARS);
 
-  for (unsigned int i = 0; i < len; i++)
+  size_t i;
+  for (i = 0; i < len; i++)
     if (contains(str[i], VALID_CHARS, mlen))
       buf += (int) str[i];
 
