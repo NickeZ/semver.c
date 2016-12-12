@@ -1,12 +1,24 @@
 CC      ?= cc
-CFLAGS   = -std=c99 -Ideps -Wall -Wno-unused-function -U__STRICT_ANSI__
+CFLAGS   = -Wall -Wextra -pedantic -Wno-unused-function -g
 VALGRIND = valgrind
+RM       = rm -f
 
-test: semver.c semver_test.c
-	@$(CC) $^ $(CFLAGS) -o $@
-	@./test
+%.o: %.c
+	$(CC) -std=c89 $(CFLAGS) -c -o $@ $^
 
-valgrind: ./test
-	@$(VALGRIND) --leak-check=full --error-exitcode=1 $^
+test: semver.o semver_test.c
+	$(CC) -std=c99 $(CFLAGS) -o $@ $^
+	./test
 
-.PHONY: test
+unittest: semver_unit.c
+	$(CC) -std=c89 $(CFLAGS) -o $@ $^
+	./unittest
+
+valgrind: test
+	$(VALGRIND) --leak-check=full --error-exitcode=1 ./$<
+
+clean:
+	$(RM) *.o
+	$(RM) test
+
+.PHONY: test unittest
