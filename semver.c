@@ -41,18 +41,18 @@ enum operators {
 
 static int
 strcut (char *str, int begin, int len) {
-  int l = strlen(str);
+  size_t l = strlen(str);
 
   if (len < 0) len = l - begin;
-  if (begin + len > l) len = l - begin;
+  if (begin + len > (int)l) len = l - begin;
   memmove(str + begin, str + begin + len, l - len + 1 - begin);
 
   return len;
 }
 
 static int
-contains (const char c, const char *matrix, int len) {
-  int x;
+contains (const char c, const char *matrix, size_t len) {
+  size_t x;
   for (x = 0; x < len; x++)
     if ((char) matrix[x] == c) return 1;
   return 0;
