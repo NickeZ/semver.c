@@ -19,6 +19,8 @@
 #define DELIMITERS   DELIMITER PR_DELIMITER MT_DELIMITER
 #define VALID_CHARS  NUMBERS ALPHA DELIMITERS
 
+#define SEMVER_TRY(fun) do { int error;  error = (fun); if(error) return error; } while(0)
+
 static const size_t MAX_SIZE     = sizeof(char) * 255;
 static const int MAX_SAFE_INT = (unsigned int) -1 >> 1;
 
@@ -48,7 +50,7 @@ strcut (char *str, int begin, int len) {
   size_t l;
   l = strlen(str);
 
-  if((int)l < 0 || (int)l > MAX_SAFE_INT) return -1;
+  if((int)l < 0 || (int)l > MAX_SAFE_INT) return status_argument_invalid;
 
   if (len < 0) len = l - begin + 1;
   if (begin + len > (int)l) len = l - begin;
@@ -96,15 +98,15 @@ binary_comparison (int x, int y) {
 }
 
 static int
-parse_int (const char *s) {
-  int valid, num;
+parse_int (int *num, const char *s) {
+  int valid;
   valid = has_valid_chars(s, NUMBERS);
-  if (valid == 0) return -1;
+  if (!valid) return status_argument_invalid;
 
-  num = strtol(s, NULL, 10);
-  if (num > MAX_SAFE_INT) return -1;
+  *num = strtol(s, NULL, 10);
+  if (*num < 0 || *num > MAX_SAFE_INT) return status_argument_invalid;
 
-  return num;
+  return status_success;
 }
 
 /*
@@ -150,7 +152,7 @@ semver_parse (const char *str, semver_t *ver) {
   size_t len;
   char *buf;
   valid = semver_is_valid(str);
-  if (!valid) return -1;
+  if (!valid) return status_argument_invalid;
 
   len = strlen(str);
   buf = calloc(len + 1, sizeof(*buf));
@@ -168,7 +170,7 @@ semver_parse (const char *str, semver_t *ver) {
 }
 
 /**
- * Parses a given string as semver expression.
+ * Parses a string as a numerical semver expression.
  *
  * Returns:
  *
@@ -189,8 +191,7 @@ semver_parse_version (const char *str, semver_t *ver) {
     if (len > SLICE_SIZE) return -1;
 
     /* Cast to integer and store */
-    value = parse_int(slice);
-    if (value == -1) return value;
+    SEMVER_TRY(parse_int(&value, slice));
 
     switch (index) {
       case 1: ver->major = value; break;
@@ -209,12 +210,12 @@ static int
 parse_prerelease_meta_init (struct metadata_s *ver, const char *slice) {
   char *buf;
   buf = malloc(sizeof(slice));
-  if (buf == NULL) return -1;
+  if (buf == NULL) return status_internal;
 
   strcpy(buf, slice);
   ver->meta = buf;
 
-  return 0;
+  return status_success;
 }
 
 static int
@@ -226,14 +227,14 @@ parse_prerelease_meta_push (struct metadata_s *ver, const char *slice) {
 
   if (buf == NULL) {
     free(ver->meta);
-    return -1;
+    return status_internal;
   }
 
   ver->meta = buf;
   strcat(ver->meta, DELIMITER);
   strcat(ver->meta, slice);
 
-  return 0;
+  return status_success;
 }
 
 static int
@@ -250,11 +251,10 @@ parse_prerelease_meta (struct metadata_s *ver, const char *slice) {
 static int
 parse_prerelease_version (struct metadata_s *ver, const char *slice) {
   int num;
-  num = parse_int(slice);
-  if (num == -1) return num;
+  SEMVER_TRY(parse_int(&num, slice));
 
   ver->version[ver->version_count++] = num;
-  return 0;
+  return status_success;
 }
 
 /**
@@ -275,26 +275,23 @@ semver_parse_prerelease (char *str, struct metadata_s *ver) {
   ver->version_count = 0;
 
   len = strlen(str);
-  if (len > SLICE_SIZE) return -1;
+  if (len > SLICE_SIZE) return status_argument_invalid;
 
   slice = strtok(str, DELIMITER);
 
   while (slice != NULL) {
     /* If numeric, cast it and store in the version buffer */
     if (semver_is_number(slice)) {
-      if (parse_prerelease_version(ver, slice))
-        return -1;
+      SEMVER_TRY(parse_prerelease_version(ver, slice));
     }
     /* If non-numeric, push to the buffer */
-    else if (parse_prerelease_meta(ver, slice)) {
-      return -1;
-    }
+    SEMVER_TRY(parse_prerelease_meta(ver, slice));
 
     /* Continue with the next slice */
     slice = strtok(NULL, DELIMITER);
   }
 
-  return 0;
+  return status_success;
 }
 
 static int
@@ -305,7 +302,7 @@ compare_metadata_prerelease (char *x, struct metadata_s *xm) {
      if (xm->meta) free(xm->meta);
      return error;
   }
-  return 0;
+  return status_success;
 }
 
 static int
@@ -347,15 +344,15 @@ static int
 compare_build_slice (struct metadata_s xm, struct metadata_s ym) {
   int res;
   /* Compare metadata strings by length */
-  (  (res = compare_metadata_string(xm, ym)) == 0
+  (void)((res = compare_metadata_string(xm, ym)) == 0
   /* Compare versions per number range */
-  && (res = compare_metadata_versions(xm, ym)));
+      && (res = compare_metadata_versions(xm, ym)));
 
   return res;
 }
 
 static int
-compare_metadata (char *x, char *y) {
+compare_metadata (int *res, char *x, char *y) {
   int resolution;
   struct metadata_s xm, ym;
   if (x == NULL && y == NULL) return 0;
@@ -365,28 +362,31 @@ compare_metadata (char *x, char *y) {
   memset(&ym, 0, sizeof(ym));
   memset(&xm, 0, sizeof(xm));
 
-  if (compare_metadata_prerelease(x, &xm)
-  ||  compare_metadata_prerelease(y, &ym)) return -1;
+  SEMVER_TRY(compare_metadata_prerelease(x, &xm));
+  SEMVER_TRY(compare_metadata_prerelease(y, &ym));
 
-  resolution = compare_build_slice(xm, ym);
+  *res = compare_build_slice(xm, ym);
 
   /* Free allocations from heap */
   if (xm.meta) free((&xm)->meta);
   if (ym.meta) free((&ym)->meta);
 
-  return resolution;
+  return status_success;
 }
 
 int
 semver_compare_metadata (semver_t x, semver_t y) {
-  int res;
-  res = compare_metadata(x.prerelease, y.prerelease);
+  int res, error;
+  error = compare_metadata(&res, x.prerelease, y.prerelease);
+  if(error) return 0;
 
   if (res
   && (x.metadata == NULL
   ||  y.metadata == NULL)) return res;
 
-  return compare_metadata(x.metadata, y.metadata);
+  error = compare_metadata(&res, x.metadata, y.metadata);
+  if(error) return 0;
+  return res;
 }
 
 /**
@@ -395,8 +395,8 @@ semver_compare_metadata (semver_t x, semver_t y) {
  *
  * Returns:
  *
- * `0` - If versiona are equal
- * `1` - If x is higher than y
+ *  `0` - If versions are equal
+ *  `1` - If x is higher than y
  * `-1` - If x is lower than y
  */
 
@@ -404,9 +404,9 @@ int
 semver_compare_version (semver_t x, semver_t y) {
   int res;
 
-  (  (res = binary_comparison(x.major, y.major)) == 0
-  && (res = binary_comparison(x.minor, y.minor)) == 0
-  && (res = binary_comparison(x.patch, y.patch)));
+  (void)((res = binary_comparison(x.major, y.major)) == 0
+      && (res = binary_comparison(x.minor, y.minor)) == 0
+      && (res = binary_comparison(x.patch, y.patch)));
 
   return res;
 }
@@ -424,8 +424,8 @@ int
 semver_compare (semver_t x, semver_t y) {
   int res;
 
-  (  (res = semver_compare_version(x, y)) == 0
-  && (res = semver_compare_metadata(x, y)));
+  (void)((res = semver_compare_version(x, y)) == 0
+      && (res = semver_compare_metadata(x, y)));
 
   return res;
 }
@@ -735,8 +735,7 @@ semver_numeric (semver_t *x) {
   if (x->minor) concat_num(buf, x->minor, NULL);
   if (x->patch) concat_num(buf, x->patch, NULL);
 
-  num = parse_int(buf);
-  if(num == -1) return -1;
+  SEMVER_TRY(parse_int(&num, buf));
 
   if (x->prerelease) num += char_to_int(x->prerelease);
   if (x->metadata) num += char_to_int(x->metadata);

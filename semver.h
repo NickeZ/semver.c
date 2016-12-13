@@ -35,6 +35,28 @@ struct metadata_s {
 };
 
 /**
+ * Error codes
+ */
+
+typedef enum {
+  status_success = 0,
+  status_argument_invalid = -1,
+  status_internal = -2,
+  status_unknown = -3
+} semver_status;
+
+/**
+ * Human readable strings of error codes
+ */
+
+static const char *semver_str[] = {
+  "successful",
+  "invalid argument",
+  "internal error",
+  "unknown error"
+};
+
+/**
  * Set prototypes
  */
 
@@ -106,6 +128,13 @@ semver_is_valid (const char *s);
 
 int
 semver_clean (char *s);
+
+static const char*
+semver_strerr(int status) {
+  if (status > 0 || status < status_unknown)
+    status = status_unknown;
+  return semver_str[-status];
+}
 
 #ifdef __cplusplus
 }

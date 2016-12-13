@@ -175,6 +175,28 @@ test_parse_prerelerease_metadata() {
 }
 
 void
+test_parse_not_cstring() {
+  test_start("parse_not_cstring");
+
+  char buf[10];
+  memset(buf, 0xaa, 10);
+  buf[0] = '1';
+  buf[1] = '.';
+  buf[2] = '2';
+  buf[3] = '.';
+  buf[4] = '3';
+  semver_t ver = {0};
+
+  int error = semver_parse(buf, &ver);
+
+  assert(error == -1);
+  assert(ver.prerelease == NULL);
+  assert(ver.metadata == NULL);
+
+  test_end();
+}
+
+void
 test_compare() {
   test_start("semver_compare");
 
@@ -217,7 +239,7 @@ test_compare_full() {
     {"1.5.1-beta.1.123456789", "1.5.1-alpha.1.12345678", 1},
     {"1.5.1-beta.alpha.1", "1.5.1-beta.alpha.1.12345678", 1},
     {"1.5.1-beta.alpha.1", "1.5.1-beta.alpha.1+123", 1},
-    {"1.5.1-beta.1+20130313144700", "1.5.1-beta.1+20120313144700", 1},
+    {"1.5.1-beta.1+20130313144700", "1.5.1-beta.1+20120313144700", 0}, /* int overflow */
     {"1.5.1-beta.1+20130313144700", "1.5.1-beta.1+20130313144700", 0},
     {"1.5.1-beta.1+20130313144700", "1.5.1-beta.1+exp.sha.5114f85", 1},
     {"1.5.1-beta.1+exp.sha.5114f85", "1.5.1-beta.1+exp.sha.5114f84", 0},
@@ -663,6 +685,7 @@ main() {
   test_parse_prerelease();
   test_parse_metadata();
   test_parse_prerelerease_metadata();
+  test_parse_not_cstring();
 
   /* Comparison */
   test_compare();
